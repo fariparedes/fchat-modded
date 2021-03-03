@@ -6,11 +6,9 @@ const child_process = require('child_process');
 
 const distDir = path.join(__dirname, 'dist');
 const isBeta = pkg.version.indexOf('beta') !== -1;
-const spellcheckerPath = 'spellchecker/build/Release/spellchecker.node', keytarPath = 'keytar/build/Release/keytar.node';
+const keytarPath = 'keytar/build/Release/keytar.node';
 const modules = path.join(__dirname, 'app', 'node_modules');
-fs.mkdirSync(path.dirname(path.join(modules, spellcheckerPath)), {recursive: true});
 fs.mkdirSync(path.dirname(path.join(modules, keytarPath)), {recursive: true});
-fs.copyFileSync(require.resolve(spellcheckerPath), path.join(modules, spellcheckerPath));
 fs.copyFileSync(require.resolve(keytarPath), path.join(modules, keytarPath));
 
 

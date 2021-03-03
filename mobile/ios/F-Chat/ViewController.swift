@@ -35,7 +35,6 @@ class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
         UIApplication.shared.statusBarStyle = .lightContent
-        (UIApplication.shared.value(forKey: "statusBar") as! UIView).backgroundColor = UIColor(white: 0, alpha: 0.5)
     }
 
     override func viewDidLoad() {

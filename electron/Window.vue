@@ -34,7 +34,7 @@
 </template>
 
 <script lang="ts">
-    import Sortable = require('sortablejs'); //tslint:disable-line:no-require-imports
+    import Sortable from 'sortablejs';
 
     import {Component, Hook} from '@f-list/vue-ts';
     import * as electron from 'electron';
@@ -67,7 +67,8 @@
         tray: Electron.Tray
     }
 
-    const trayIcon = path.join(__dirname, <string>require('./build/tray.png')); //tslint:disable-line:no-require-imports
+    //tslint:disable-next-line:no-require-imports no-unsafe-any
+    const trayIcon = path.join(__dirname, <string>require('./build/tray.png').default);
 
     @Component
     export default class Window extends Vue {
@@ -192,7 +193,7 @@
             const tray = new electron.remote.Tray(trayIcon);
             tray.setToolTip(l('title'));
             tray.on('click', (_) => this.trayClicked(tab));
-            const view = new electron.remote.BrowserView({webPreferences: {nodeIntegration: true}});
+            const view = new electron.remote.BrowserView({webPreferences: {webviewTag: true, nodeIntegration: true, spellcheck: true, enableRemoteModule: true}});
             view.setAutoResize({width: true, height: true});
             electron.ipcRenderer.send('tab-added', view.webContents.id);
             const tab = {active: false, view, user: undefined, hasNew: false, tray};

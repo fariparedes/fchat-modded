@@ -40,6 +40,9 @@ import {ensureDictionary, getAvailableDictionaries} from './dictionaries';
 import * as windowState from './window_state';
 import BrowserWindow = Electron.BrowserWindow;
 import MenuItem = Electron.MenuItem;
+import MenuItemConstructorOptions = Electron.MenuItemConstructorOptions;
+import { AdCoordinatorHost } from '../chat/ads/ad-coordinator-host';
+import { IpcMainEvent } from 'electron';
 
 // Module to control application life.
 const app = electron.app;
@@ -118,7 +121,8 @@ function createWindow(): Electron.BrowserWindow | undefined {
     if(tabCount >= 3) return;
     const lastState = windowState.getSavedWindowState();
     const windowProperties: Electron.BrowserWindowConstructorOptions & {maximized: boolean} = {
-        ...lastState, center: lastState.x === undefined, show: false, webPreferences: {nodeIntegration: true}
+        ...lastState, center: lastState.x === undefined, show: false,
+        webPreferences: { webviewTag: true, nodeIntegration: true, spellcheck: true, enableRemoteModule: true }
     };
     if(process.platform === 'darwin') windowProperties.titleBarStyle = 'hiddenInset';
     else windowProperties.frame = false;
@@ -213,7 +217,7 @@ function onReady(): void {
         ]
     };
     if(process.env.NODE_ENV !== 'production')
-        viewItem.submenu.unshift({role: 'reload'}, {role: 'forcereload'}, {role: 'toggledevtools'}, {type: 'separator'});
+        viewItem.submenu.unshift({role: 'reload'}, {role: 'forceReload'}, {role: 'toggleDevTools'}, {type: 'separator'});
     const spellcheckerMenu = new electron.Menu();
     //tslint:disable-next-line:no-floating-promises
     addSpellcheckerItems(spellcheckerMenu);
@@ -237,12 +241,12 @@ function onReady(): void {
                 {
                     label: l('settings.logDir'),
                     click: (_, window: BrowserWindow) => {
-                        const dir = electron.dialog.showOpenDialog(
+                        const dir = electron.dialog.showOpenDialogSync(
                             {defaultPath: settings.logDirectory, properties: ['openDirectory']});
                         if(dir !== undefined) {
                             if(dir[0].startsWith(path.dirname(app.getPath('exe'))))
                                 return electron.dialog.showErrorBox(l('settings.logDir'), l('settings.logDir.inAppDir'));
-                            const button = electron.dialog.showMessageBox(window, {
+                            const button = electron.dialog.showMessageBoxSync(window, {
                                 message: l('settings.logDir.confirm', dir[0], settings.logDirectory),
                                 buttons: [l('confirmYes'), l('confirmNo')],
                                 cancelId: 1
@@ -296,14 +300,15 @@ function onReady(): void {
                     label: l('fixLogs.action'),
                     click: (_, window: BrowserWindow) => window.webContents.send('fix-logs')
                 },
+
                 {type: 'separator'},
                 {role: 'minimize'},
                 {
                     accelerator: process.platform === 'darwin' ? 'Cmd+Q' : undefined,
                     label: l('action.quit'),
-                    click(_: Electron.MenuItem, window: Electron.BrowserWindow): void {
+                    click(_m: Electron.MenuItem, window: Electron.BrowserWindow): void {
                         if(characters.length === 0) return app.quit();
-                        const button = electron.dialog.showMessageBox(window, {
+                        const button = electron.dialog.showMessageBoxSync(window, {
                             message: l('chat.confirmLeave'),
                             buttons: [l('confirmYes'), l('confirmNo')],
                             cancelId: 1
@@ -314,7 +319,7 @@ function onReady(): void {
                         }
                     }
                 }
-            ]
+            ] as MenuItemConstructorOptions[]
         }, {
             label: `&${l('action.edit')}`,
             submenu: [
@@ -324,7 +329,7 @@ function onReady(): void {
                 {role: 'cut'},
                 {role: 'copy'},
                 {role: 'paste'},
-                {role: 'selectall'}
+                {role: 'selectAll'}
             ]
         }, viewItem, {
             label: `&${l('help')}`,
@@ -387,9 +392,11 @@ function onReady(): void {
         const index = characters.indexOf(character);
         if(index !== -1) characters.splice(index, 1);
     });
+    const adCoordinator = new AdCoordinatorHost();
+    electron.ipcMain.on('request-send-ad', (event: IpcMainEvent, adId: string) => (adCoordinator.processAdRequest(event, adId)));
     const emptyBadge = electron.nativeImage.createEmpty();
-    //tslint:disable-next-line:no-require-imports
-    const badge = electron.nativeImage.createFromPath(path.join(__dirname, <string>require('./build/badge.png')));
+    //tslint:disable-next-line:no-require-imports no-unsafe-any
+    const badge = electron.nativeImage.createFromPath(path.join(__dirname, <string>require('./build/badge.png').default));
     electron.ipcMain.on('has-new', (e: Event & {sender: Electron.WebContents}, hasNew: boolean) => {
         if(process.platform === 'darwin') app.dock.setBadge(hasNew ? '!' : '');
         const window = electron.BrowserWindow.fromWebContents(e.sender) as BrowserWindow | undefined;

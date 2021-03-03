@@ -74,7 +74,8 @@
                 highlight: this.highlight,
                 highlightWords: this.highlightWords.split(',').map((x) => x.trim()).filter((x) => x.length),
                 joinMessages: this.joinMessages,
-                defaultHighlights: this.defaultHighlights
+                defaultHighlights: this.defaultHighlights,
+                adSettings: this.conversation.settings.adSettings
             };
         }
     }

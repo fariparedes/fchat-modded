@@ -1,11 +1,15 @@
 import {queuedJoin} from '../fchat/channels';
 import {decodeHTML} from '../fchat/common';
+import { AdManager } from './ads/ad-manager';
 import {characterImage, ConversationSettings, EventMessage, Message, messageToString} from './common';
 import core from './core';
 import {Channel, Character, Conversation as Interfaces} from './interfaces';
 import l from './localize';
 import {CommandContext, isAction, isCommand, isWarn, parse as parseCommand} from './slash_commands';
 import MessageType = Interfaces.Message.Type;
+import throat from 'throat';
+import Bluebird from 'bluebird';
+import log from 'electron-log'; //tslint:disable-line:match-default-export-name
 
 function createMessage(this: void, type: MessageType, sender: Character, text: string, time?: Date): Message {
     if(type === MessageType.Message && isAction(text)) {
@@ -35,8 +39,12 @@ abstract class Conversation implements Interfaces.Conversation {
     protected allMessages: Interfaces.Message[] = [];
     readonly reportMessages: Interfaces.Message[] = [];
     private lastSent = '';
+    adManager: AdManager;
+	
+    protected static readonly conversationThroat = throat(1); // make sure user posting and ad posting won't get in each others' way
 
     constructor(readonly key: string, public _isPinned: boolean) {
+        this.adManager = new AdManager(this);
     }
 
     get settings(): Interfaces.Settings {
@@ -118,6 +126,32 @@ abstract class Conversation implements Interfaces.Conversation {
     }
 
     protected abstract doSend(): Promise<void> | void;
+
+    protected static readonly POST_DELAY = 1250;
+
+    protected static async testPostDelay(): Promise<void> {
+        const lastPostDelta = Date.now() - core.conversations.getLastPost().getTime();
+
+        // console.log('Last Post Delta', lastPostDelta, ((lastPostDelta < Conversation.POST_DELAY) && (lastPostDelta > 0)));
+
+        if ((lastPostDelta < Conversation.POST_DELAY) && (lastPostDelta > 0)) {
+            await Bluebird.delay(Conversation.POST_DELAY - lastPostDelta);
+        }
+    }
+	
+    isSendingAutomatedAds(): boolean {
+        return this.adManager.isActive();
+    }
+
+
+    toggleAutomatedAds(): void {
+        this.adManager.isActive() ? this.adManager.stop() : this.adManager.start();
+    }
+
+
+    hasAutomatedAds(): boolean {
+        return (this.adManager.getAds().length > 0);
+    }
 }
 
 class PrivateConversation extends Conversation implements Interfaces.PrivateConversation {
@@ -186,6 +220,10 @@ class PrivateConversation extends Conversation implements Interfaces.PrivateConv
         }
         if(this.character.isIgnored) {
             this.errorText = l('chat.errorIgnored', this.character.name);
+            return;
+        }
+        if(this.adManager.isActive()) {
+            this.errorText = 'Cannot send ads manually while ad auto-posting is active';
             return;
         }
         core.connection.send('PRI', {recipient: this.name, message: this.enteredText});
@@ -312,13 +350,86 @@ class ChannelConversation extends Conversation implements Interfaces.ChannelConv
 
     protected async doSend(): Promise<void> {
         const isAd = this.isSendingAds;
-        if(isAd && Date.now() < this.nextAd) return;
-        core.connection.send(isAd ? 'LRP' : 'MSG', {channel: this.channel.id, message: this.enteredText});
-        await this.addMessage(
-            createMessage(isAd ? MessageType.Ad : MessageType.Message, core.characters.ownCharacter, this.enteredText, new Date()));
-        if(isAd)
-            this.nextAd = Date.now() + core.connection.vars.lfrp_flood * 1000;
-        else this.clearText();
+        if(this.adManager.isActive()) {
+            this.errorText = 'Cannot post ads manually while ad auto-posting is active';
+            return;
+        }
+
+        if(isAd && Date.now() < this.nextAd) {
+            this.errorText = 'You must wait at least ten minutes between ad posts on this channel';
+            return;
+        }
+
+        const message = this.enteredText;
+
+        if (!isAd) {
+            this.clearText();
+        }
+
+        await Conversation.conversationThroat(
+          async() => {
+                await Conversation.testPostDelay();
+
+                core.connection.send(isAd ? 'LRP' : 'MSG', {channel: this.channel.id, message});
+                core.conversations.markLastPostTime();
+
+                await this.addMessage(
+                    createMessage(isAd ? MessageType.Ad : MessageType.Message, core.characters.ownCharacter, message, new Date())
+                );
+
+                if(isAd)
+                    this.nextAd = Date.now() + core.connection.vars.lfrp_flood * 1000;
+          }
+        );
+    }
+	
+    hasAutomatedAds(): boolean {
+        return ((this.mode === 'both') || (this.mode === 'ads'))
+            && super.hasAutomatedAds();
+    }
+
+
+    async sendAd(text: string): Promise<void> {
+        if (text.length < 1)
+            return;
+
+        const initTime = Date.now();
+
+        await Conversation.conversationThroat(
+            async() => {
+                const throatTime = Date.now();
+
+                await Promise.all(
+                    [
+                        await Conversation.testPostDelay(),
+                        await core.adCoordinator.requestTurnToPostAd()
+                    ]
+                );
+
+                const delayTime = Date.now();
+
+                core.connection.send('LRP', {channel: this.channel.id, message: text});
+                core.conversations.markLastPostTime();
+
+                log.debug(
+                'conversation.sendAd',
+                  {
+                    character: core.characters.ownCharacter?.name,
+                    channel: this.channel.name,
+                    throatDelta: throatTime - initTime,
+                    delayDelta: delayTime - throatTime,
+                    totalWait: delayTime - initTime,
+                    text
+                  }
+                );
+
+                await this.addMessage(
+                    createMessage(MessageType.Ad, core.characters.ownCharacter, text, new Date())
+                );
+
+                this.nextAd = Date.now() + core.connection.vars.lfrp_flood * 1000;
+            }
+        );
     }
 }
 
@@ -361,6 +472,15 @@ class State implements Interfaces.State {
     settings!: {[key: string]: Interfaces.Settings};
     modes!: {[key: string]: Channel.Mode | undefined};
     windowFocused = document.hasFocus();
+    lastPost: Date = new Date();
+
+    markLastPostTime(): void {
+        this.lastPost = new Date();
+    }
+
+    getLastPost(): Date {
+        return this.lastPost;
+    }
 
     get hasNew(): boolean {
         return this.privateConversations.some((x) => x.unread === Interfaces.UnreadState.Mention) ||
@@ -482,6 +602,7 @@ export default function(this: void): Interfaces.State {
                 if(state.recentChannels.length >= 50) state.recentChannels.pop();
                 state.recentChannels.unshift({channel: channel.id, name: conv.channel.name});
                 core.settingsStore.set('recentChannels', state.recentChannels); //tslint:disable-line:no-floating-promises
+                AdManager.onNewChannelAvailable(conv);
             } else {
                 const conv = state.channelMap[channel.id];
                 if(conv === undefined) return;
@@ -598,8 +719,14 @@ export default function(this: void): Interfaces.State {
         if(!core.state.settings.eventMessages || conv !== state.selectedConversation) await conv.addMessage(message);
     });
     connection.onMessage('TPN', (data) => {
-        const conv = state.privateMap[data.character.toLowerCase()];
-        if(conv !== undefined) conv.typingStatus = data.status;
+        const char = core.characters.get(data.character);
+        if(char.isIgnored) {
+			const conv = state.getPrivate(char);
+			if(conv !== undefined) conv.typingStatus = data.status;
+		} else {
+			const conv = state.privateMap[data.character.toLowerCase()];
+			if(conv !== undefined) conv.typingStatus = data.status;
+		}
     });
     connection.onMessage('CBU', async(data, time) => {
         const conv = state.channelMap[data.channel.toLowerCase()];

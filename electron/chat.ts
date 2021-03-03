@@ -41,7 +41,7 @@ import {setupRaven} from '../chat/vue-raven';
 import Socket from '../chat/WebSocket';
 import Connection from '../fchat/connection';
 import {Keys} from '../keys';
-import {GeneralSettings, nativeRequire} from './common';
+import {GeneralSettings/*, nativeRequire*/} from './common';
 import {Logs, SettingsStore} from './filesystem';
 import * as SlimcatImporter from './importer';
 import Index from './Index.vue';
@@ -52,7 +52,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
         electron.remote.getCurrentWebContents().toggleDevTools();
 });
 
-process.env.SPELLCHECKER_PREFER_HUNSPELL = '1';
+/*process.env.SPELLCHECKER_PREFER_HUNSPELL = '1';
 const sc = nativeRequire<{
     Spellchecker: new() => {
         add(word: string): void
@@ -62,7 +62,7 @@ const sc = nativeRequire<{
         getCorrectionsForMisspelling(word: string): ReadonlyArray<string>
     }
 }>('spellchecker/build/Release/spellchecker.node');
-const spellchecker = new sc.Spellchecker();
+const spellchecker = new sc.Spellchecker();*/
 
 Axios.defaults.params = {__fchat: `desktop/${electron.remote.app.getVersion()}`};
 
@@ -147,7 +147,7 @@ webContents.on('context-menu', (_, props) => {
             click: () => electron.clipboard.writeText(props.selectionText)
         });
     if(props.misspelledWord !== '') {
-        const corrections = spellchecker.getCorrectionsForMisspelling(props.misspelledWord);
+        const corrections = props.dictionarySuggestions; //spellchecker.getCorrectionsForMisspelling(props.misspelledWord);
         menuTemplate.unshift({
             label: l('spellchecker.add'),
             click: () => electron.ipcRenderer.send('dictionary-add', props.misspelledWord)
@@ -170,12 +170,12 @@ webContents.on('context-menu', (_, props) => {
 let dictDir = path.join(electron.remote.app.getPath('userData'), 'spellchecker');
 if(process.platform === 'win32') //get the path in DOS (8-character) format as special characters cause problems otherwise
     exec(`for /d %I in ("${dictDir}") do @echo %~sI`, (_, stdout) => dictDir = stdout.trim());
-electron.webFrame.setSpellCheckProvider('', {spellCheck: (words, callback) => callback(words.filter((x) => spellchecker.isMisspelled(x)))});
+//electron.webFrame.setSpellCheckProvider('', {spellCheck: (words, callback) => callback(words.filter((x) => spellchecker.isMisspelled(x)))});
 
 function onSettings(s: GeneralSettings): void {
     settings = s;
-    spellchecker.setDictionary(s.spellcheckLang, dictDir);
-    for(const word of s.customDictionary) spellchecker.add(word);
+    //spellchecker.setDictionary(s.spellcheckLang, dictDir);
+    //for(const word of s.customDictionary) spellchecker.add(word);
 }
 
 electron.ipcRenderer.on('settings', (_: Event, s: GeneralSettings) => onSettings(s));

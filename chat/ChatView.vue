@@ -97,7 +97,7 @@
 <script lang="ts">
     import {Component, Hook} from '@f-list/vue-ts';
     //tslint:disable-next-line:no-require-imports
-    import Sortable = require('sortablejs');
+    import Sortable from 'sortablejs';
     import Vue from 'vue';
     import {Keys} from '../keys';
     import ChannelList from './ChannelList.vue';

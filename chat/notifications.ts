@@ -56,7 +56,7 @@ export default class Notifications implements Interface {
                 const src = document.createElement('source');
                 src.type = `audio/${name}`;
                 //tslint:disable-next-line:no-require-imports
-                src.src = <string>require(`./assets/${sound}.${codecs[name]}`);
+                src.src = <string>require(`./assets/${sound}.${codecs[name]}`).default;
                 audio.appendChild(src);
             }
             document.body.appendChild(audio);

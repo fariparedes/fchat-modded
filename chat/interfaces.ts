@@ -2,6 +2,7 @@
 import {Connection} from '../fchat';
 
 import {Channel, Character} from '../fchat/interfaces';
+import { AdManager } from './ads/ad-manager';
 export {Connection, Channel, Character} from '../fchat/interfaces';
 export const userStatuses: ReadonlyArray<Character.Status> = ['online', 'looking', 'away', 'busy', 'dnd'];
 export const channelModes: ReadonlyArray<Channel.Mode> = ['chat', 'ads', 'both'];
@@ -62,6 +63,12 @@ export namespace Conversation {
         mode: Channel.Mode
         readonly nextAd: number
         isSendingAds: boolean
+
+        isSendingAutomatedAds(): boolean
+        toggleAutomatedAds(): void
+        hasAutomatedAds(): boolean
+
+        sendAd(text: string): Promise<void>
     }
 
     export function isPrivate(conversation: Conversation): conversation is PrivateConversation {
@@ -80,6 +87,9 @@ export namespace Conversation {
         readonly recentChannels: ReadonlyArray<RecentChannelConversation>
         readonly selectedConversation: Conversation
         readonly hasNew: boolean;
+		lastPost: Date
+		markLastPostTime(): void
+		getLastPost(): Date
         byKey(key: string): Conversation | undefined
         getPrivate(character: Character): PrivateConversation
     }
@@ -94,6 +104,12 @@ export namespace Conversation {
         readonly highlightWords: ReadonlyArray<string>;
         readonly joinMessages: Setting;
         readonly defaultHighlights: boolean;
+        readonly adSettings: AdSettings;
+    }
+
+    export interface AdSettings {
+        readonly ads: string[];
+        readonly randomOrder: boolean;
     }
 
     export const enum UnreadState { None, Unread, Mention }
@@ -109,6 +125,7 @@ export namespace Conversation {
         readonly key: string
         readonly unread: UnreadState
         settings: Settings
+        readonly adManager: AdManager;
         send(): Promise<void>
         clear(): void
         loadLastSent(): void

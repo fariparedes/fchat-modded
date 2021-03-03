@@ -42,12 +42,31 @@
                     <a href="#" @click.prevent="reportDialog.report()" class="btn">
                         <span class="fa fa-exclamation-triangle"></span><span class="btn-text">{{l('chat.report')}}</span></a>
                 </div>
-                <ul class="nav nav-pills mode-switcher">
-                    <li v-for="mode in modes" class="nav-item">
-                        <a :class="isChannel(conversation) ? {active: conversation.mode == mode, disabled: conversation.channel.mode != 'both'} : undefined"
-                            class="nav-link" href="#" @click.prevent="setMode(mode)">{{l('channel.mode.' + mode)}}</a>
-                    </li>
-                </ul>
+<!--                <ul class="nav nav-pills mode-switcher">-->
+<!--                    <li v-for="mode in modes" class="nav-item">-->
+<!--                        <a :class="isChannel(conversation) ? {active: conversation.mode == mode, disabled: conversation.channel.mode != 'both'} : undefined"
+<!--                            class="nav-link" href="#" @click.prevent="setMode(mode)">{{l('channel.mode.' + mode)}}</a>-->
+<!--                    </li>-->
+<!--                </ul>-->
+				<div class="btn-toolbar">
+                    <dropdown :keep-open="false" title="View" :icon-class="{fas: true, 'fa-comments': conversation.mode === 'chat', 'fa-ad': conversation.mode === 'ads', 'fa-asterisk': conversation.mode === 'both'}" wrap-class="btn-group views" link-class="btn btn-secondary dropdown-toggle" v-show="(conversation.channel.mode == 'both')">
+                        <button v-for="mode in modes" class="dropdown-item" :class="{ selected: conversation.mode == mode }" type="button" @click="setMode(mode)">{{l('channel.mode.' + mode)}}</button>
+                    </dropdown>
+
+                    <dropdown :keep-open="false" wrap-class="btn-group ads" link-style="" link-class="btn btn-secondary dropdown-toggle dropdown-toggle-split" v-show="(conversation.channel.mode == 'both' || conversation.channel.mode == 'ads')">
+                        <button class="dropdown-item" type="button" @click="toggleAutoPostAds()">{{conversation.adManager.isActive() ? 'Pause' : 'Start'}} Posting Ads</button>
+                        <button class="dropdown-item" type="button" @click="showAdSettings()">Edit Channel Ads...</button>
+<!--                       <div class="dropdown-divider"></div>-->
+<!--                        <button class="dropdown-item" :class="{ selected: showNonMatchingAds }" type="button" @click="toggleNonMatchingAds()">Show Incompatible Ads</button>-->
+
+                        <template v-slot:split>
+                            <a class="btn btn-secondary" @click="toggleAutoPostAds()">
+                                <i :class="{fas: true, 'fa-pause': conversation.adManager.isActive(), 'fa-play': !conversation.adManager.isActive()}"></i>
+                                {{conversation.adManager.isActive() ? 'Pause' : 'Start'}} Ads
+                            </a>
+                        </template>
+                    </dropdown>
+                </div>
             </div>
             <div style="z-index:5;position:absolute;left:0;right:0;max-height:60%;overflow:auto"
                 :style="{display: descriptionExpanded ? 'block' : 'none'}" class="bg-solid-text border-bottom">
@@ -105,13 +124,12 @@
                     {{getByteLength(conversation.enteredText)}} / {{conversation.maxMessageLength}}
                 </div>
                 <ul class="nav nav-pills send-ads-switcher" v-if="isChannel(conversation)"
-                    style="position:relative;z-index:10;margin-right:5px">
-                    <li class="nav-item">
-                        <a href="#" :class="{active: !conversation.isSendingAds, disabled: conversation.channel.mode != 'both'}"
+                    style="position:relative;z-index:10;margin-right:5px"><li class="nav-item" v-show="((conversation.channel.mode === 'both') || (conversation.channel.mode === 'chat'))">
+                        <a href="#" :class="{active: !conversation.isSendingAds, disabled: (conversation.channel.mode != 'both') || (conversation.adManager.isActive())}"
                             class="nav-link" @click.prevent="setSendingAds(false)">{{l('channel.mode.chat')}}</a>
                     </li>
-                    <li class="nav-item">
-                        <a href="#" :class="{active: conversation.isSendingAds, disabled: conversation.channel.mode != 'both'}"
+                    <li class="nav-item" v-show="((conversation.channel.mode === 'both') || (conversation.channel.mode === 'ads'))">
+                        <a href="#" :class="{active: conversation.isSendingAds, disabled: (conversation.channel.mode != 'both') || (conversation.adManager.isActive())}"
                             class="nav-link" @click.prevent="setSendingAds(true)">{{adsMode}}</a>
                     </li>
                 </ul>
@@ -120,6 +138,7 @@
         </bbcode-editor>
         <command-help ref="helpDialog"></command-help>
         <settings ref="settingsDialog" :conversation="conversation"></settings>
+        <adSettings ref="adSettingsDialog" :conversation="conversation"></adSettings>
         <logs ref="logsDialog" :conversation="conversation"></logs>
         <manage-channel ref="manageDialog" v-if="isChannel(conversation)" :channel="conversation.channel"></manage-channel>
     </div>
@@ -136,6 +155,7 @@
     import CommandHelp from './CommandHelp.vue';
     import {characterImage, getByteLength, getKey} from './common';
     import ConversationSettings from './ConversationSettings.vue';
+    import ConversationAdSettings from './ads/ConversationAdSettings.vue';
     import core from './core';
     import {Channel, channelModes, Character, Conversation, Settings} from './interfaces';
     import l from './localize';
@@ -145,11 +165,13 @@
     import ReportDialog from './ReportDialog.vue';
     import {isCommand} from './slash_commands';
     import UserView from './user_view';
+    import Dropdown from '../components/Dropdown.vue';
 
     @Component({
         components: {
             user: UserView, 'bbcode-editor': Editor, 'manage-channel': ManageChannel, settings: ConversationSettings,
-            logs: Logs, 'message-view': MessageView, bbcode: BBCodeView(core.bbCodeParser), 'command-help': CommandHelp
+            logs: Logs, 'message-view': MessageView, bbcode: BBCodeView(core.bbCodeParser), 'command-help': CommandHelp,
+			dropdown: Dropdown, adSettings: ConversationAdSettings
         }
     })
     export default class ConversationView extends Vue {
@@ -178,6 +200,10 @@
         ignoreScroll = false;
         adCountdown = 0;
         adsMode = l('channel.mode.ads');
+        autoPostingUpdater = 0;
+        adAutoPostUpdate: string | null = null;
+        adAutoPostNextAd: string | null = null;
+        adsRequireSetup = false;
         isChannel = Conversation.isChannel;
         isPrivate = Conversation.isPrivate;
 
@@ -220,6 +246,8 @@
                     this.adCountdown = window.setInterval(setAdCountdown, 1000);
                 setAdCountdown();
             });
+            this.$watch(() => this.conversation.adManager.isActive(), () => (this.refreshAutoPostingTimer()));
+            this.refreshAutoPostingTimer();
         }
 
         @Hook('destroyed')
@@ -379,8 +407,88 @@
             (<ConversationSettings>this.$refs['settingsDialog']).show();
         }
 
+        showAdSettings(): void {
+            (<ConversationAdSettings>this.$refs['adSettingsDialog']).show();
+        }
+
         showManage(): void {
             (<ManageChannel>this.$refs['manageDialog']).show();
+        }
+		
+        isAutopostingAds(): boolean {
+            return this.conversation.adManager.isActive();
+        }
+
+
+        skipAd(): void {
+          this.conversation.adManager.skipAd();
+          this.updateAutoPostingState();
+        }
+
+
+        stopAutoPostAds(): void {
+            this.conversation.adManager.stop();
+        }
+
+
+        renewAutoPosting(): void {
+            this.conversation.adManager.renew();
+
+            this.refreshAutoPostingTimer();
+        }
+
+
+        toggleAutoPostAds(): void {
+            if(this.isAutopostingAds())
+                this.stopAutoPostAds();
+            else
+                this.conversation.adManager.start();
+
+            this.refreshAutoPostingTimer();
+        }
+
+
+        updateAutoPostingState() {
+            const adManager = this.conversation.adManager;
+
+            this.adAutoPostNextAd = adManager.getNextAd() || null;
+
+            if(this.adAutoPostNextAd) {
+                const diff = ((adManager.getNextPostDue() || new Date()).getTime() - Date.now()) / 1000;
+                const expDiff = ((adManager.getExpireDue() || new Date()).getTime() - Date.now()) / 1000;
+
+                const diffMins = Math.floor(diff / 60);
+                const diffSecs = Math.floor(diff % 60);
+                const expDiffMins = Math.floor(expDiff / 60);
+                const expDiffSecs = Math.floor(expDiff % 60);
+
+                this.adAutoPostUpdate = l(
+                    ((adManager.getNextPostDue()) && (!adManager.getFirstPost())) ? 'admgr.postingBegins' : 'admgr.nextPostDue',
+                    diffMins,
+                    diffSecs
+                ) + l('admgr.expiresIn', expDiffMins, expDiffSecs);
+
+                this.adsRequireSetup = false;
+            } else {
+                this.adAutoPostNextAd = null;
+
+                this.adAutoPostUpdate = l('admgr.noAds');
+                this.adsRequireSetup = true;
+            }
+        };
+
+        refreshAutoPostingTimer(): void {
+            if (this.autoPostingUpdater)
+                window.clearInterval(this.autoPostingUpdater);
+
+            if (!this.isAutopostingAds()) {
+                this.adAutoPostUpdate = null;
+                this.adAutoPostNextAd = null;
+                return;
+            }
+
+            this.autoPostingUpdater = window.setInterval(() => this.updateAutoPostingState(), 1000);
+            this.updateAutoPostingState();
         }
 
         hasSFC(message: Conversation.Message): message is Conversation.SFCMessage {

@@ -81,8 +81,8 @@
     import * as fs from 'fs';
     import * as path from 'path';
     import * as qs from 'querystring';
-    import * as Raven from 'raven-js';
-    import {promisify} from 'util';
+    import Raven from 'raven-js';
+    //import {promisify} from 'util';
     import Vue from 'vue';
     import Chat from '../chat/Chat.vue';
     import {getKey, Settings} from '../chat/common';
@@ -103,13 +103,18 @@
 
     log.info('About to load keytar');
     /*tslint:disable:no-any*///because this is hacky
-    const keyStore = nativeRequire<{
-        getPassword(account: string): Promise<string>
-        setPassword(account: string, password: string): Promise<void>
-        deletePassword(account: string): Promise<void>
+    const keyStore = nativeRequire<
+      {
+        getPassword(service: string, account: string): Promise<string>
+        setPassword(service: string, account: string, password: string): Promise<void>
+        deletePassword(service: string, account: string): Promise<void>
+        findCredentials(service: string): Promise<{ account: string, password: string }>
+        findPassword(service: string): Promise<string>
         [key: string]: (...args: any[]) => Promise<any>
-    }>('keytar/build/Release/keytar.node');
-    for(const key in keyStore) keyStore[key] = promisify(<(...args: any[]) => any>keyStore[key].bind(keyStore, 'fchat'));
+      }
+    >('keytar/build/Release/keytar.node');
+
+    //for(const key in keyStore) keyStore[key] = promisify(<(...args: any[]) => any>keyStore[key].bind(keyStore, 'fchat'));
     //tslint:enable
     log.info('Loaded keytar.');
 
@@ -135,7 +140,7 @@
         @Hook('created')
         created(): void {
             if(this.settings.account.length > 0) this.saveLogin = true;
-            keyStore.getPassword(this.settings.account)
+			keyStore.getPassword('f-list.net', this.settings.account)
                 .then((value: string) => this.password = value, (err: Error) => this.error = err.message);
 
             Vue.set(core.state, 'generalSettings', this.settings);
@@ -162,7 +167,7 @@
             if(this.loggingIn) return;
             this.loggingIn = true;
             try {
-                if(!this.saveLogin) await keyStore.deletePassword(this.settings.account);
+                if(!this.saveLogin) await keyStore.deletePassword('f-list.net', this.settings.account);
                 const data = <{ticket?: string, error: string, characters: {[key: string]: number}, default_character: number}>
                     (await Axios.post('https://www.f-list.net/json/getApiTicket.php', qs.stringify({
                         account: this.settings.account, password: this.password, no_friends: true, no_bookmarks: true,
@@ -174,7 +179,7 @@
                 }
                 if(this.saveLogin) {
                     electron.ipcRenderer.send('save-login', this.settings.account, this.settings.host);
-                    await keyStore.setPassword(this.settings.account, this.password);
+                    await keyStore.setPassword('f-list.net', this.settings.account, this.password);
                 }
                 Socket.host = this.settings.host;
 
@@ -194,7 +199,7 @@
                     }
                 });
                 core.connection.onEvent('connected', () => {
-                    core.watch(() => core.conversations.hasNew, (newValue) => parent.send('has-new', webContents.id, newValue));
+					core.watch(() => core.conversations.hasNew, (newValue) => parent.send('has-new', webContents.id, newValue));
                     Raven.setUserContext({username: core.connection.character});
                 });
                 core.connection.onEvent('closed', () => {

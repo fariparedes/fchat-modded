@@ -3,15 +3,15 @@
     "target": "es2017",
     "module": "commonjs",
     "sourceMap": true,
-    "experimentalDecorators": true,
     "allowJs": true,
     "noEmitHelpers": true,
     "importHelpers": true,
-    "strict": true,
     "forceConsistentCasingInFileNames": true,
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-	"esModuleInterop": true
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
   },
-  "include": ["chat.ts", "window.ts", "../**/*.d.ts"]
+  "include": ["./electron/main.ts"]
 }

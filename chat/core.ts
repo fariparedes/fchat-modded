@@ -4,6 +4,7 @@ import BBCodeParser from './bbcode';
 import {Settings as SettingsImpl} from './common';
 import Conversations from './conversations';
 import {Channel, Character, Connection, Conversation, Logs, Notifications, Settings, State as StateInterface} from './interfaces';
+import { AdCoordinatorGuest } from './ads/ad-coordinator-guest';
 
 function createBBCodeParser(): BBCodeParser {
     const parser = new BBCodeParser();
@@ -44,12 +45,6 @@ const vue = <Vue & VueState>new Vue({
         characters: undefined,
         conversations: undefined,
         state
-    },
-    watch: {
-        'state.hiddenUsers': async(newValue: string[], oldValue: string[]) => {
-            if(data.settingsStore !== undefined && newValue !== oldValue)
-                await data.settingsStore.set('hiddenUsers', newValue);
-        }
     }
 });
 
@@ -63,6 +58,7 @@ const data = {
     channels: <Channel.State | undefined>undefined,
     characters: <Character.State | undefined>undefined,
     notifications: <Notifications | undefined>undefined,
+    adCoordinator: <AdCoordinatorGuest | undefined>undefined,
     register<K extends 'characters' | 'conversations' | 'channels'>(module: K, subState: VueState[K]): void {
         Vue.set(vue, module, subState);
         (<VueState[K]>data[module]) = subState;
@@ -83,9 +79,13 @@ export function init(this: void, connection: Connection, logsClass: new() => Log
     data.logs = new logsClass();
     data.settingsStore = new settingsClass();
     data.notifications = new notificationsClass();
+    data.adCoordinator = new AdCoordinatorGuest();
     data.register('characters', Characters(connection));
     data.register('channels', Channels(connection, core.characters));
     data.register('conversations', Conversations());
+	data.watch(() => state.hiddenUsers, async(newValue) => {
+        if(data.settingsStore !== undefined) await data.settingsStore.set('hiddenUsers', newValue);
+    });
     connection.onEvent('connecting', async() => {
         await data.reloadSettings();
         data.bbCodeParser = createBBCodeParser();
@@ -102,6 +102,7 @@ export interface Core {
     readonly channels: Channel.State
     readonly bbCodeParser: BBCodeParser
     readonly notifications: Notifications
+    readonly adCoordinator: AdCoordinatorGuest
     watch<T>(getter: (this: VueState) => T, callback: WatchHandler<T>): void
 }
 

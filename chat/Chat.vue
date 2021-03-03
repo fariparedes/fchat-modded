@@ -44,6 +44,7 @@ import {InlineDisplayMode} from '../interfaces';
     import l from './localize';
     import Logs from './Logs.vue';
     import {init as profileApiInit} from './profile_api';
+    import { AdManager } from './ads/ad-manager';
 
     type BBCodeNode = Node & {bbcodeTag?: string, bbcodeParam?: string};
 
@@ -126,6 +127,8 @@ import {InlineDisplayMode} from '../interfaces';
                 if(this.connected) core.notifications.playSound('logout');
                 this.connected = false;
                 this.connecting = false;
+                AdManager.onConnectionClosed();
+                core.adCoordinator.clear();
                 document.title = l('title');
             });
             core.connection.onEvent('connecting', async() => {
