@@ -22,10 +22,10 @@ export interface RecoverableAd {
 
 
 export class AdManager {
-    static readonly POSTING_PERIOD = 3 * 60 * 60 * 1000;
+    static readonly POSTING_PERIOD = 12 * 60 * 60 * 1000;
     static readonly START_VARIANCE = 3 * 60 * 1000;
-    static readonly POST_VARIANCE = 8 * 60 * 1000;
-    static readonly POST_DELAY = 1.5 * 60 * 1000;
+    static readonly POST_VARIANCE = 60 * 1000;
+    static readonly POST_DELAY = 5 * 1000;
 
     static readonly POST_MANUAL_THRESHOLD = 5 * 1000; // don't post anything within 5 seconds of other posts
 
@@ -101,7 +101,6 @@ export class AdManager {
 
         await this.sendAdToChannel(msg, chanConv);
 
-        // post next ad every 12 - 22 minutes
         const nextInMs = Math.max(0, (chanConv.nextAd - Date.now())) +
             AdManager.POST_DELAY +
             Math.random() * AdManager.POST_VARIANCE;

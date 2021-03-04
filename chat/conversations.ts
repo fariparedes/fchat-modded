@@ -226,11 +226,24 @@ class PrivateConversation extends Conversation implements Interfaces.PrivateConv
             this.errorText = 'Cannot send ads manually while ad auto-posting is active';
             return;
         }
-        core.connection.send('PRI', {recipient: this.name, message: this.enteredText});
-        const message = createMessage(MessageType.Message, core.characters.ownCharacter, this.enteredText);
-        this.safeAddMessage(message);
-        if(core.state.settings.logMessages) await core.logs.logMessage(this, message);
+
+        const messageText = this.enteredText;
+
         this.clearText();
+
+        await Conversation.conversationThroat(
+            async() => {
+                await Conversation.testPostDelay();
+
+                core.connection.send('PRI', {recipient: this.name, message: messageText});
+                core.conversations.markLastPostTime();
+
+                const message = createMessage(MessageType.Message, core.characters.ownCharacter, messageText);
+                this.safeAddMessage(message);
+
+                if(core.state.settings.logMessages) await core.logs.logMessage(this, message);
+            }
+        );
     }
 
     private setOwnTyping(status: Interfaces.TypingStatus): void {
@@ -340,6 +353,9 @@ class ChannelConversation extends Conversation implements Interfaces.ChannelConv
 
     close(): void {
         core.connection.send('LCH', {channel: this.channel.id});
+		if(this.adManager.isActive()) {
+            this.adManager.stop();
+        }
     }
 
     async sort(newIndex: number): Promise<void> {
@@ -720,7 +736,7 @@ export default function(this: void): Interfaces.State {
     });
     connection.onMessage('TPN', (data) => {
         const char = core.characters.get(data.character);
-        if(char.isIgnored) {
+        if(!char.isIgnored) {
 			const conv = state.getPrivate(char);
 			if(conv !== undefined) conv.typingStatus = data.status;
 		} else {
