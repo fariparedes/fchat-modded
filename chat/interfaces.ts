@@ -159,6 +159,7 @@ export namespace Settings {
         recent: Conversation.RecentPrivateConversation[]
         recentChannels: Conversation.RecentChannelConversation[]
         hiddenUsers: string[]
+        silencedUsers: string[]
     };
 
     export interface Store {
@@ -204,4 +205,5 @@ export interface Notifications {
 export interface State {
     settings: Settings
     hiddenUsers: string[]
+    silencedUsers: string[]
 }

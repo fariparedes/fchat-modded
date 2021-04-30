@@ -111,6 +111,8 @@ const strings: {[key: string]: string | undefined} = {
     'user.unignore': 'Unignore',
     'user.hide': 'Hide ads',
     'user.unhide': 'Unhide ads',
+    'user.silence': 'Silence status updates',
+    'user.unsilence': 'Unsilence status updates',
     'user.memo': 'View memo',
     'user.memo.action': 'Update memo',
     'user.report': 'Report user',

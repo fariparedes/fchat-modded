@@ -23,6 +23,8 @@
                 <span class="far fa-fw fa-bookmark"></span>{{l('user.' + (character.isBookmarked ? 'unbookmark' : 'bookmark'))}}</a>
             <a tabindex="-1" href="#" @click.prevent="setHidden()" class="list-group-item list-group-item-action" v-show="!isChatOp">
                 <span class="fa fa-fw fa-eye-slash"></span>{{l('user.' + (isHidden ? 'unhide' : 'hide'))}}</a>
+            <a tabindex="-1" href="#" @click.prevent="setSilenced()" class="list-group-item list-group-item-action">
+                <span class="fa fa-fw fa-microphone-slash"></span>{{l('user.' + (isSilenced ? 'unsilence' : 'silence'))}}</a>
             <a tabindex="-1" href="#" @click.prevent="report()" class="list-group-item list-group-item-action" style="border-top-width:1px">
                 <span class="fa fa-fw fa-exclamation-triangle"></span>{{l('user.report')}}</a>
             <a tabindex="-1" href="#" @click.prevent="setIgnored()" class="list-group-item list-group-item-action">
@@ -88,6 +90,12 @@
             else core.state.hiddenUsers.push(this.character!.name);
         }
 
+        setSilenced(): void {
+            const index = core.state.silencedUsers.indexOf(this.character!.name.toLowerCase());
+            if(index !== -1) core.state.silencedUsers.splice(index, 1);
+            else core.state.silencedUsers.push(this.character!.name.toLowerCase());
+        }
+
         report(): void {
             this.reportDialog.report(this.character!);
         }
@@ -129,6 +137,10 @@
 
         get isHidden(): boolean {
             return core.state.hiddenUsers.indexOf(this.character!.name) !== -1;
+        }
+
+        get isSilenced(): boolean {
+            return core.state.silencedUsers.indexOf(this.character!.name.toLowerCase()) !== -1;
         }
 
         get isChatOp(): boolean {

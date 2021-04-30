@@ -16,6 +16,7 @@ function createBBCodeParser(): BBCodeParser {
 class State implements StateInterface {
     _settings: Settings | undefined = undefined;
     hiddenUsers: string[] = [];
+    silencedUsers: string[] = [];
 
     get settings(): Settings {
         if(this._settings === undefined) throw new Error('Settings load failed.');
@@ -70,6 +71,8 @@ const data = {
         state._settings = Object.assign(new SettingsImpl(), await core.settingsStore.get('settings'));
         const hiddenUsers = await core.settingsStore.get('hiddenUsers');
         state.hiddenUsers = hiddenUsers !== undefined ? hiddenUsers : [];
+        const silencedUsers = await core.settingsStore.get('silencedUsers');
+        state.silencedUsers = silencedUsers !== undefined ? silencedUsers : [];
     }
 };
 
@@ -85,6 +88,9 @@ export function init(this: void, connection: Connection, logsClass: new() => Log
     data.register('conversations', Conversations());
 	data.watch(() => state.hiddenUsers, async(newValue) => {
         if(data.settingsStore !== undefined) await data.settingsStore.set('hiddenUsers', newValue);
+    });
+	data.watch(() => state.silencedUsers, async(newValue) => {
+        if(data.settingsStore !== undefined) await data.settingsStore.set('silencedUsers', newValue);
     });
     connection.onEvent('connecting', async() => {
         await data.reloadSettings();

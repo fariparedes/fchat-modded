@@ -366,7 +366,7 @@ class ChannelConversation extends Conversation implements Interfaces.ChannelConv
 
     protected async doSend(): Promise<void> {
         const isAd = this.isSendingAds;
-        if(this.adManager.isActive()) {
+        if(isAd && this.adManager.isActive()) {
             this.errorText = 'Cannot post ads manually while ad auto-posting is active';
             return;
         }
@@ -576,7 +576,7 @@ async function addEventMessage(this: void, message: Interfaces.Message): Promise
 }
 
 function isOfInterest(this: void, character: Character): boolean {
-    return character.isFriend || character.isBookmarked || state.privateMap[character.name.toLowerCase()] !== undefined;
+    return (character.isFriend || character.isBookmarked || state.privateMap[character.name.toLowerCase()] !== undefined) && core.state.silencedUsers.indexOf(character.name.toLowerCase()) === -1;
 }
 
 export default function(this: void): Interfaces.State {
@@ -735,9 +735,9 @@ export default function(this: void): Interfaces.State {
         if(!core.state.settings.eventMessages || conv !== state.selectedConversation) await conv.addMessage(message);
     });
     connection.onMessage('TPN', (data) => {
-        const char = core.characters.get(data.character);
-        if(!char.isIgnored) {
-			const conv = state.getPrivate(char);
+        const chara = core.characters.get(data.character);
+        if(!chara.isIgnored) {
+			const conv = state.getPrivate(chara);
 			if(conv !== undefined) conv.typingStatus = data.status;
 		} else {
 			const conv = state.privateMap[data.character.toLowerCase()];
