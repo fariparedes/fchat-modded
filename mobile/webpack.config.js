@@ -60,5 +60,8 @@ module.exports = function(mode) {
     } else {
         config.devtool = 'none';
     }
+    config.node = {
+        fs: 'empty',
+    }
     return config;
 };
